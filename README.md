@@ -46,31 +46,3 @@ Since the live application demonstrates dynamic effects (3D rotation, data loadi
     ```
 2.  **Open in Android Studio:** Open the cloned directory as an Android Studio project.
 3.  **Run:** Select a physical device (requires **USB Debugging** enabled) or an Android Emulator and click the **Run** button (▶️).
-
-## 💻 Code Highlights
-
-### 1. 3D Rotating Pager Effect
-
-This code block shows how the `graphicsLayer` modifier is used alongside the Pager's offset fraction to create the custom rotation effect, demonstrating advanced UI manipulation.
-
-```kotlin
-// Snippet from RotatingCircularPager Composable
-.graphicsLayer {
-    val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction).absoluteValue
-
-    val scale = lerp(
-        start = 0.85f,
-        stop = 1f,
-        fraction = 1f - pageOffset.coerceIn(0f, 1f)
-    )
-    var rotationY = lerp(
-        start = 0f,
-        stop = 60f, // Subtle rotation for a better look
-        fraction = pageOffset.coerceIn(0f, 1f)
-    ) * if (pagerState.currentPage < pageIndex) 1 else -1
-
-    scaleX = scale
-    scaleY = scale
-    rotationY = rotationY
-    cameraDistance = 12 * density // Essential for 3D perspective
-}
