@@ -8,10 +8,9 @@ This project demonstrates expertise in Android UI, state management using Unidir
 
 * **Real-time Data Fetching:** Retrieves current, today's, and tomorrow's hourly electricity spot prices.
 * **Historical Data:** Fetches and displays price history for the last 7 days.
-* **Custom UI:** Features a unique, interactive **3D Rotating Card Pager** effect using `HorizontalPager` and `graphicsLayer` transformations.
-* **Custom Data Visualization:** Includes a hand-coded **Line Graph Composable** (`PriceGraph`) built with the `Canvas` API for price visualization.
+* **Custom UI:** Features a interactive **3D Rotating Card Pager** effect using `HorizontalPager` and `graphicsLayer` transformations.
+* **Custom Data Visualization:** Includes a **Line Graph Composable** (`PriceGraph`) built with the `Canvas` API for price visualization.
 * **State Management:** Implements robust **Unidirectional Data Flow (UDF)** using a `sealed class` (`DataState`) for clear handling of `Loading`, `Success`, and `Error` states.
-* **Light/Dark Theme:** Supports dynamic theming using Material 3 `ColorScheme` and `isSystemInDarkTheme()`.
 
 ## 🛠️ Tech Stack & Architecture
 
@@ -23,12 +22,6 @@ This project demonstrates expertise in Android UI, state management using Unidir
 | **Networking** | **`HttpURLConnection`** | Used for raw, efficient API requests to `https://api.spot-hinta.fi`. |
 | **Visualization** | **`Canvas` API** | Custom composable for drawing the price line graph. |
 | **API** | **`spot-hinta.fi`** | Public API for electricity market price data. |
-
-## 🖼️ Application Screenshots
-
-Since the live application demonstrates dynamic effects (3D rotation, data loading), include a short GIF or static images here.
-
-
 
 ## 🚀 Getting Started
 
