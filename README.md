@@ -1,0 +1,76 @@
+# ⚡ Finnish Spot Price Dashboard (SpotPriceShowcase)
+
+A modern Android application built entirely with **Jetpack Compose** to fetch, visualize, and present real-time and historical electricity spot prices in Finland from the `spot-hinta.fi` API.
+
+This project demonstrates expertise in advanced Android UI, state management using Unidirectional Data Flow (UDF), asynchronous programming with Coroutines, and custom data visualization.
+
+## ✨ Key Features
+
+* **Real-time Data Fetching:** Retrieves current, today's, and tomorrow's hourly electricity spot prices.
+* **Historical Data:** Fetches and displays price history for the last 7 days.
+* **Custom UI:** Features a unique, interactive **3D Rotating Card Pager** effect using `HorizontalPager` and `graphicsLayer` transformations.
+* **Custom Data Visualization:** Includes a hand-coded **Line Graph Composable** (`PriceGraph`) built with the `Canvas` API for price visualization.
+* **State Management:** Implements robust **Unidirectional Data Flow (UDF)** using a `sealed class` (`DataState`) for clear handling of `Loading`, `Success`, and `Error` states.
+* **Light/Dark Theme:** Supports dynamic theming using Material 3 `ColorScheme` and `isSystemInDarkTheme()`.
+
+## 🛠️ Tech Stack & Architecture
+
+| Category | Technology/Concept | Purpose |
+| :--- | :--- | :--- |
+| **UI Framework** | **Jetpack Compose** | Declarative, modern Android UI toolkit. |
+| **Concurrency** | **Kotlin Coroutines** (`Dispatchers.IO`, `suspend`) | Handles network operations off the main thread for performance. |
+| **Architecture** | **Unidirectional Data Flow (UDF)** | Clear, predictable data flow (`DataState` sealed class). |
+| **Networking** | **`HttpURLConnection`** | Used for raw, efficient API requests to `https://api.spot-hinta.fi`. |
+| **Visualization** | **`Canvas` API** | Custom composable for drawing the price line graph. |
+| **API** | **`spot-hinta.fi`** | Public API for electricity market price data. |
+
+## 🖼️ Application Screenshots
+
+Since the live application demonstrates dynamic effects (3D rotation, data loading), include a short GIF or static images here.
+
+
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+* Android Studio Jellyfish | 2023.3.1 or newer
+* Kotlin 1.9+
+* Android SDK 34 (Target SDK 34)
+
+### Running the Project
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone [https://github.com/YourUsername/spot-price-showcase.git](https://github.com/YourUsername/spot-price-showcase.git)
+    ```
+2.  **Open in Android Studio:** Open the cloned directory as an Android Studio project.
+3.  **Run:** Select a physical device (requires **USB Debugging** enabled) or an Android Emulator and click the **Run** button (▶️).
+
+## 💻 Code Highlights
+
+### 1. 3D Rotating Pager Effect
+
+This code block shows how the `graphicsLayer` modifier is used alongside the Pager's offset fraction to create the custom rotation effect, demonstrating advanced UI manipulation.
+
+```kotlin
+// Snippet from RotatingCircularPager Composable
+.graphicsLayer {
+    val pageOffset = ((pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction).absoluteValue
+
+    val scale = lerp(
+        start = 0.85f,
+        stop = 1f,
+        fraction = 1f - pageOffset.coerceIn(0f, 1f)
+    )
+    var rotationY = lerp(
+        start = 0f,
+        stop = 60f, // Subtle rotation for a better look
+        fraction = pageOffset.coerceIn(0f, 1f)
+    ) * if (pagerState.currentPage < pageIndex) 1 else -1
+
+    scaleX = scale
+    scaleY = scale
+    rotationY = rotationY
+    cameraDistance = 12 * density // Essential for 3D perspective
+}
