@@ -2,7 +2,7 @@
 
 A modern Android application built entirely with **Jetpack Compose** to fetch, visualize, and present real-time and historical electricity spot prices in Finland from the `spot-hinta.fi` API.
 
-This project demonstrates expertise in advanced Android UI, state management using Unidirectional Data Flow (UDF), asynchronous programming with Coroutines, and custom data visualization.
+This project demonstrates expertise in Android UI, state management using Unidirectional Data Flow (UDF), asynchronous programming with Coroutines, and custom data visualization.
 
 ## ✨ Key Features
 
