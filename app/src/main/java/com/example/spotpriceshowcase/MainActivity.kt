@@ -28,21 +28,25 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
-import kotlinx.coroutines.delay
-import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.absoluteValue
 
-// --- 1. Data Model matching sahkohinta-api.fi response ---
+// --- 1. Data Model matching spot-hinta.fi API response ---
 
 /**
  * Data class representing a single hourly price entry from the API.
  */
 data class PriceEntry(
     val datetime: String, // e.g., "2023-10-27T00:00:00+03:00"
-    val priceEurPerMWh: Double // The spot price
+    val priceEurPerMWh: Double // The spot price in cents per kWh (API returns this)
 ) {
     // Helper property to parse the datetime string into a ZonedDateTime object
     val parsedDateTime: ZonedDateTime?
@@ -59,7 +63,7 @@ data class PriceEntry(
 
     // Property to reliably get the full date and time for display
     val displayTime: String
-        get() = parsedDateTime?.format(DateTimeFormatter.ofPattern("EEEE, HH:mm")).orEmpty()
+        get() = parsedDateTime?.format(DateTimeFormatter.ofPattern("EEEE, HH:mm", Locale.getDefault())).orEmpty()
 
     // Property to get the day of the year for comparison
     val dayOfYear: Int
@@ -74,59 +78,84 @@ sealed class DataState {
     data class Error(val message: String) : DataState()
 }
 
-// --- 3. Mock Services (Split for Today and Weekly data) ---
+// --- 3. Real API Implementation ---
 
 /**
- * **MOCK IMPLEMENTATION:** Simulates fetching 24 hours of data for TODAY.
- * API URL Construction Hint:
- * API expects dates like YYYY/MM/DD. Use LocalDate.now().
- * E.g.: `.../api/v1/price/day/${LocalDate.now().year}/${LocalDate.now().monthValue}/${LocalDate.now().dayOfMonth}`
+ * Fetches today's and tomorrow's prices from spot-hinta.fi API
+ * API returns prices in cents/kWh for today and tomorrow
  */
-suspend fun fetchTodaysPrices(): List<PriceEntry> {
-    delay(2000)
-    // Random error simulation
-    if (Math.random() < 0.05) throw Exception("Simulated Daily Data Network Error")
+suspend fun fetchTodayAndTomorrowPrices(): List<PriceEntry> = withContext(Dispatchers.IO) {
+    val apiUrl = "https://api.spot-hinta.fi/TodayAndDayForward"
 
-    // Generate 24 points for today
-    val today = LocalDate.now()
-    return (0..23).map { hour ->
-        val basePrice = 30.0 + (kotlin.math.sin(hour / 4.0) * 20.0)
-        val noise = Math.random() * 5.0 - 2.5
-        PriceEntry(
-            datetime = "${today}T${String.format(Locale.getDefault(), "%02d", hour)}:00:00+03:00",
-            priceEurPerMWh = String.format(Locale.getDefault(), "%.2f", (basePrice + noise)).toDouble()
-        )
+    val connection = URL(apiUrl).openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+    connection.connectTimeout = 10000
+    connection.readTimeout = 10000
+
+    try {
+        val responseCode = connection.responseCode
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            parsePriceData(response)
+        } else {
+            throw Exception("HTTP Error: $responseCode")
+        }
+    } finally {
+        connection.disconnect()
     }
 }
 
 /**
- * **MOCK IMPLEMENTATION:** Simulates fetching 168 hours of data for the PAST WEEK.
- * API URL Construction Hint:
- * You would loop through the last 7 days and call the daily endpoint 7 times,
- * or use a separate weekly/monthly endpoint if the API provides one.
+ * Parses the JSON response from the API
+ * Expected format: Array of objects with "DateTime" and "PriceWithTax" fields
  */
-suspend fun fetchWeeklyPrices(): List<PriceEntry> {
-    delay(3000) // Longer delay for more data
-    if (Math.random() < 0.05) throw Exception("Simulated Weekly Data Network Error")
-
+private fun parsePriceData(jsonResponse: String): List<PriceEntry> {
     val prices = mutableListOf<PriceEntry>()
-    val today = LocalDate.now()
+    val jsonArray = JSONArray(jsonResponse)
 
-    // Simulate 7 days (168 hours) of data
-    for (day in 0 until 7) {
-        val date = today.minusDays(day.toLong())
-        for (hour in 0..23) {
-            val basePrice = 40.0 + (kotlin.math.sin((hour + day * 4) / 8.0) * 30.0)
-            val noise = Math.random() * 10.0 - 5.0
-            prices.add(
-                PriceEntry(
-                    datetime = "${date}T${String.format(Locale.getDefault(), "%02d", hour)}:00:00+03:00",
-                    priceEurPerMWh = String.format(Locale.getDefault(), "%.2f", (basePrice + noise)).toDouble()
-                )
-            )
-        }
+    for (i in 0 until jsonArray.length()) {
+        val item = jsonArray.getJSONObject(i)
+        val dateTime = item.getString("DateTime")
+        // API returns price in cents/kWh, convert to €/MWh by multiplying by 10
+        val priceWithTax = item.getDouble("PriceWithTax") * 10.0
+
+        prices.add(PriceEntry(
+            datetime = dateTime,
+            priceEurPerMWh = priceWithTax
+        ))
     }
+
     return prices
+}
+
+/**
+ * Fetches 7 days of historical data
+ * Note: spot-hinta.fi API might have limited historical data
+ * For a complete 7-day history, you may need to call the API multiple times
+ * or use a different endpoint if available
+ */
+suspend fun fetchWeeklyPrices(): List<PriceEntry> = withContext(Dispatchers.IO) {
+    // For now, we'll use the same endpoint as it provides today and tomorrow
+    // In a production app, you'd need to implement proper historical data fetching
+    // possibly by calling the API with date parameters or using a different endpoint
+    val apiUrl = "https://api.spot-hinta.fi/TodayAndDayForward"
+
+    val connection = URL(apiUrl).openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+    connection.connectTimeout = 10000
+    connection.readTimeout = 10000
+
+    try {
+        val responseCode = connection.responseCode
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            parsePriceData(response)
+        } else {
+            throw Exception("HTTP Error: $responseCode")
+        }
+    } finally {
+        connection.disconnect()
+    }
 }
 
 
@@ -196,12 +225,11 @@ fun PriceGraph(hourlyPrices: List<PriceEntry>, lineColor: Color, isWeekly: Boole
         val width = size.width
         val height = size.height
         val totalHours = hourlyPrices.size.toFloat()
-        // Ensure totalHours is not zero before dividing. For 168 hours, stepX will be much smaller.
         val stepX = if (totalHours > 1) width / (totalHours - 1) else 0f
 
         val path = Path()
 
-        // Sort data by datetime to ensure the graph draws chronologically, especially for weekly data
+        // Sort data by datetime to ensure the graph draws chronologically
         hourlyPrices.sortedBy { it.datetime }.forEachIndexed { index, data ->
             val xCoord = index * stepX
 
@@ -215,7 +243,7 @@ fun PriceGraph(hourlyPrices: List<PriceEntry>, lineColor: Color, isWeekly: Boole
                 path.lineTo(xCoord, yCoord)
             }
 
-            // Draw data point circle only for daily view to keep weekly view cleaner
+            // Draw data point circle only for daily view
             if (!isWeekly) {
                 drawCircle(
                     color = lineColor,
@@ -244,21 +272,21 @@ fun RotatingCircularPager() {
     // Separate state for weekly history (used on Page 1)
     var weeklyDataState by remember { mutableStateOf<DataState>(DataState.Loading) }
 
-    // Fetch data for today
+    // Fetch data for today and tomorrow
     LaunchedEffect(Unit) {
         try {
-            todayDataState = DataState.Success(fetchTodaysPrices())
+            todayDataState = DataState.Success(fetchTodayAndTomorrowPrices())
         } catch (e: Exception) {
-            todayDataState = DataState.Error("Daily Data: ${e.message}")
+            todayDataState = DataState.Error("Failed to load data: ${e.message}")
         }
     }
 
-    // Fetch data for the past week
+    // Fetch data for weekly view
     LaunchedEffect(Unit) {
         try {
             weeklyDataState = DataState.Success(fetchWeeklyPrices())
         } catch (e: Exception) {
-            weeklyDataState = DataState.Error("Weekly Data: ${e.message}")
+            weeklyDataState = DataState.Error("Failed to load weekly data: ${e.message}")
         }
     }
 
@@ -296,7 +324,6 @@ fun RotatingCircularPager() {
                 modifier = Modifier.weight(1f),
                 key = { it }
             ) { pageIndex ->
-                // Custom Page Transform for the Circular Rotation Effect (Unchanged)
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -330,7 +357,7 @@ fun RotatingCircularPager() {
                     val dataForPage = when (pageIndex) {
                         0 -> todayDataState
                         1 -> weeklyDataState
-                        else -> todayDataState // Page 2 can use today's data for forecast mock
+                        else -> todayDataState
                     }
                     when (dataForPage) {
                         is DataState.Loading -> LoadingScreen()
@@ -342,7 +369,7 @@ fun RotatingCircularPager() {
                 }
             }
 
-            // Simple indicator (Unchanged)
+            // Simple indicator
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -407,21 +434,20 @@ fun ErrorScreen(message: String) {
 @Composable
 fun DataScreen(pageIndex: Int, prices: List<PriceEntry>) {
     val title = when (pageIndex) {
-        0 -> "Today's Hourly Prices (€/MWh)"
-        1 -> "Past Week History (168 Hours)"
-        2 -> "Hourly Forecast (Mock)"
+        0 -> "Today & Tomorrow (€/MWh)"
+        1 -> "Price History"
+        2 -> "Forecast View"
         else -> "Data View"
     }
 
     // --- Current Price/Time Logic ---
     val currentDateTime = ZonedDateTime.now()
-    // Find the price entry that matches the current day and hour (essential for weekly data)
     val currentPriceEntry = prices.firstOrNull {
         it.parsedDateTime?.hour == currentDateTime.hour &&
-                it.parsedDateTime?.dayOfYear == currentDateTime.dayOfYear // Ensures it's today's price
+                it.parsedDateTime?.dayOfYear == currentDateTime.dayOfYear
     }
 
-    // Find the cheapest and most expensive prices in the current dataset
+    // Find the cheapest and most expensive prices
     val minPrice = prices.minOfOrNull { it.priceEurPerMWh }
     val maxPrice = prices.maxOfOrNull { it.priceEurPerMWh }
 
@@ -437,31 +463,35 @@ fun DataScreen(pageIndex: Int, prices: List<PriceEntry>) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        // Quick Stats - Show only on the Today/Forecast page for clarity
+        // Quick Stats
         if (pageIndex == 0 || pageIndex == 2) {
             if (currentPriceEntry != null) {
-                // Now showing the current price, hour, AND day
                 Text(
-                    text = "Current Price (${currentPriceEntry.displayTime}): €${String.format(Locale.getDefault(), "%.2f", currentPriceEntry.priceEurPerMWh)}",
-                    fontSize = 18.sp,
+                    text = "Current: €${String.format(Locale.getDefault(), "%.2f", currentPriceEntry.priceEurPerMWh)}/MWh",
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = currentPriceEntry.displayTime,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
             if (minPrice != null && maxPrice != null) {
                 Text(
-                    text = "Daily Range: €${String.format(Locale.getDefault(), "%.2f", minPrice)} to €${String.format(Locale.getDefault(), "%.2f", maxPrice)}",
+                    text = "Range: €${String.format(Locale.getDefault(), "%.2f", minPrice)} - €${String.format(Locale.getDefault(), "%.2f", maxPrice)}",
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
             }
         } else if (pageIndex == 1) {
-            // Stats for Weekly Page
             if (minPrice != null && maxPrice != null) {
                 Text(
-                    text = "7-Day Range: €${String.format(Locale.getDefault(), "%.2f", minPrice)} to €${String.format(Locale.getDefault(), "%.2f", maxPrice)}",
+                    text = "Range: €${String.format(Locale.getDefault(), "%.2f", minPrice)} - €${String.format(Locale.getDefault(), "%.2f", maxPrice)}",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
@@ -469,7 +499,6 @@ fun DataScreen(pageIndex: Int, prices: List<PriceEntry>) {
                 )
             }
         }
-
 
         Box(
             modifier = Modifier
@@ -483,11 +512,12 @@ fun DataScreen(pageIndex: Int, prices: List<PriceEntry>) {
                 isWeekly = pageIndex == 1
             )
         }
+
         Text(
             text = when(pageIndex) {
-                0 -> "Graph shows 24 hourly prices for today."
-                1 -> "Graph shows 168 hourly prices for the past week."
-                else -> "Graph shows simulated forecast data."
+                0 -> "Showing ${prices.size} hourly prices from spot-hinta.fi API"
+                1 -> "Historical price data"
+                else -> "Forecast data"
             },
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
