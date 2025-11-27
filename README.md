@@ -1,4 +1,4 @@
-# ⚡ Finnish Spot Price Dashboard (SpotPriceShowcase)
+# ⚡ Finnish Electricity Spot Price Dashboard (SpotPriceShowcase)
 
 A modern Android application built entirely with **Jetpack Compose** to fetch, visualize, and present real-time and historical electricity spot prices in Finland from the `spot-hinta.fi` API.
 
