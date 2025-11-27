@@ -138,6 +138,7 @@ suspend fun fetchWeeklyPrices(): List<PriceEntry> = withContext(Dispatchers.IO) 
     // For now, we'll use the same endpoint as it provides today and tomorrow
     // In a production app, you'd need to implement proper historical data fetching
     // possibly by calling the API with date parameters or using a different endpoint
+
     val apiUrl = "https://api.spot-hinta.fi/TodayAndDayForward"
 
     val connection = URL(apiUrl).openConnection() as HttpURLConnection
